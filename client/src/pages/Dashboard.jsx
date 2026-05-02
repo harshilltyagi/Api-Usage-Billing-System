@@ -154,22 +154,26 @@ function Dashboard() {
 
   const payBill = async () => {
     try {
+      // 1. Check amount
       if (Number(stats.amountDue) <= 0) {
         alert("No amount due");
         return;
       }
 
+      // 2. Check Razorpay loaded
       if (!window.Razorpay) {
         alert("Razorpay script not loaded");
         return;
       }
 
+      // 3. Create order
       const { data } = await axios.post(
         `${API_URL}/api/payment/create-order`,
-        { amount: stats.amountDue },
+        { amount: Number(stats.amountDue) },
         getAuthConfig(),
       );
 
+      // 4. Razorpay options
       const options = {
         key: data.key,
         amount: data.order.amount,
@@ -178,21 +182,38 @@ function Dashboard() {
         description: "API Usage Billing Payment",
         order_id: data.order.id,
 
+        // ✅ FIXED HANDLER
         handler: async function (response) {
-          await axios.post(
-            `${API_URL}/api/payment/verify`,
-            response,
-            getAuthConfig(),
-          );
+          try {
+            await axios.post(
+              `${API_URL}/api/payment/verify`,
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              getAuthConfig(),
+            );
 
-          localStorage.setItem("paymentStatus", "paid");
-          setPaymentStatus("paid");
-          alert("Payment successful");
+            localStorage.setItem("paymentStatus", "paid");
+            setPaymentStatus("paid");
+
+            alert("Payment successful ✅");
+          } catch (err) {
+            console.log("VERIFY ERROR:", err);
+            alert("Payment verification failed ❌");
+          }
         },
 
+        // Optional
         prefill: {
           name: user?.name || "MeterFlow User",
           email: user?.email || "test@example.com",
+          contact: "9870412345",
+        },
+
+        notes: {
+          app: "MeterFlow",
         },
 
         theme: {
@@ -200,10 +221,19 @@ function Dashboard() {
         },
       };
 
+      // 5. Open Razorpay
       const razorpay = new window.Razorpay(options);
+
+      // HANDLE FAILURE
+      razorpay.on("payment.failed", function (response) {
+        console.log("PAYMENT FAILED:", response.error);
+        alert(response.error.description || "Payment failed ❌");
+      });
+
       razorpay.open();
-    } catch {
-      alert("Payment failed");
+    } catch (error) {
+      console.log("ORDER ERROR:", error);
+      alert(error.response?.data?.message || "Payment failed ❌");
     }
   };
 
