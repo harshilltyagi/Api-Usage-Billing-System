@@ -10,25 +10,34 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-console.log("KEY_ID:", process.env.RAZORPAY_KEY_ID);
-console.log("KEY_SECRET:", process.env.RAZORPAY_KEY_SECRET);
-
 router.post("/create-order", authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body;
 
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({
+        message: "Invalid amount",
+      });
+    }
+
+    const finalAmount = Math.max(Number(amount), 1);
+
     const order = await razorpay.orders.create({
-      amount: Math.round(Number(amount) * 100),
+      amount: Math.round(finalAmount * 100),
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     });
 
     res.status(200).json({
       order,
-      key: process.env.RAZORPAY_KEY_ID,
+      key: `process.env.RAZORPAY_KEY_ID`,
     });
   } catch (error) {
-    res.status(500).json({ message: "Order creation failed" });
+    console.log("Razorpay order error:", error);
+
+    res.status(500).json({
+      message: "Order creation failed",
+    });
   }
 });
 
@@ -45,12 +54,20 @@ router.post("/verify", authMiddleware, async (req, res) => {
       .digest("hex");
 
     if (razorpay_signature === expectedSign) {
-      return res.status(200).json({ message: "Payment verified" });
+      return res.status(200).json({
+        message: "Payment verified",
+      });
     }
 
-    return res.status(400).json({ message: "Invalid payment signature" });
+    return res.status(400).json({
+      message: "Invalid payment signature",
+    });
   } catch (error) {
-    res.status(500).json({ message: "Payment verification failed" });
+    console.log("Payment verification error:", error);
+
+    res.status(500).json({
+      message: "Payment verification failed",
+    });
   }
 });
 
